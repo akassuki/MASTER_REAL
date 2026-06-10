@@ -807,7 +807,7 @@ def main():
     threading.Thread(target=config_monitor_loop, args=(mqtt_client,), daemon=True).start()
     threading.Thread(target=polling_loop,         args=(cfg, modbus, mqtt_client), daemon=True).start()
     threading.Thread(target=control_loop,         args=(cfg, modbus), daemon=True).start()
-    threading.Thread(target=ota_update_loop,      args=(cfg, modbus), daemon=True).start()
+    threading.Thread(target=ota_update_loop                         , daemon=True).start()
 
     try:
         while True:
