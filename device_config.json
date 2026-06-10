@@ -1,0 +1,1260 @@
+{
+  "PollInterval": 30000,
+  "ResponseTimeout": 5,
+  "LogFile": "/home/pi/Desktop/historyData.txt",
+  "mqtt": {
+    "host": "14.224.150.7",
+    "port": 1883,
+    "username": "mqtt",
+    "password": "thanhcong"
+  },
+  "lora": {
+    "port": "/dev/ttyModbusLora",
+    "baudrate": 9600,
+    "model": "433T30D",
+    "channel": 15
+  },
+  "devices": [
+    {
+      "name": "DEV_147",
+      "dest_h": "0x00",
+      "dest_l": "0x03",
+      "slave_id": "0x03",
+      "control": {
+        "cmd_reg": 10,
+        "freq_reg": 11
+      },
+      "topic_control": "IoT_ONE_Connect/FAR_VN_CT2/HOU_VN_CT2_01/control",
+      "read": {
+        "start": 12,
+        "qty": 5,
+        "fields": [
+          {
+            "name": "Freq_hz",
+            "type": "u16",
+            "index": 1,
+            "scale": 0.01,
+            "iot_unit_point": "IUP_11DC73D2"
+          },
+          {
+            "name": "Current_a",
+            "type": "u16",
+            "index": 2,
+            "scale": 0.01,
+            "iot_unit_point": "IUP_EB274D09"
+          },
+          {
+            "name": "Voltage_v",
+            "type": "u16",
+            "index": 3,
+            "scale": 0.1,
+            "iot_unit_point": "IUP_AC506D7B"
+          },
+          {
+            "name": "Power_kw",
+            "type": "u16",
+            "index": 4,
+            "scale": 0.01,
+            "iot_unit_point": "IUP_428617F5"
+          }
+        ]
+      },
+      "display_target": {
+        "slave_id": "0x02",
+        "dest_h": "0x00",
+        "dest_l": "0x02",
+        "mappings": [
+          {
+            "field": "Freq_hz",
+            "hmi_reg": 39,
+            "scale": 100
+          },
+          {
+            "field": "Voltage_v",
+            "hmi_reg": 40,
+            "scale": 10
+          },
+          {
+            "field": "Current_a",
+            "hmi_reg": 41,
+            "scale": 100
+          },
+          {
+            "field": "Power_kw",
+            "hmi_reg": 42,
+            "scale": 100
+          }
+        ]
+      },
+      "topic": "IoT_ONE_Connect/FAR_VN_CT2/HOU_VN_CT2_01/DEV_147/data",
+      "topic_status": "IoT_ONE_Connect/FAR_VN_CT2/HOU_VN_CT2_01/DEV_147/status"
+    },
+    {
+      "name": "DEV_148",
+      "dest_h": "0x00",
+      "dest_l": "0x03",
+      "slave_id": "0x03",
+      "control": {
+        "cmd_reg": 20,
+        "freq_reg": 21
+      },
+      "topic_control": "IoT_ONE_Connect/FAR_VN_CT2/HOU_VN_CT2_01/control",
+      "read": {
+        "start": 22,
+        "qty": 5,
+        "fields": [
+          {
+            "name": "Freq_hz",
+            "type": "u16",
+            "index": 1,
+            "scale": 0.01,
+            "iot_unit_point": "IUP_5B79F4BA"
+          },
+          {
+            "name": "Current_a",
+            "type": "u16",
+            "index": 2,
+            "scale": 0.01,
+            "iot_unit_point": "IUP_EC8D4FDB"
+          },
+          {
+            "name": "Voltage_v",
+            "type": "u16",
+            "index": 3,
+            "scale": 0.1,
+            "iot_unit_point": "IUP_D8C19B92"
+          },
+          {
+            "name": "Power_kw",
+            "type": "u16",
+            "index": 4,
+            "scale": 0.01,
+            "iot_unit_point": "IUP_5AC45146"
+          }
+        ]
+      },
+      "display_target": {
+        "slave_id": "0x02",
+        "dest_h": "0x00",
+        "dest_l": "0x02",
+        "mappings": [
+          {
+            "field": "Freq_hz",
+            "hmi_reg": 43,
+            "scale": 10
+          },
+          {
+            "field": "Voltage_v",
+            "hmi_reg": 44,
+            "scale": 10
+          },
+          {
+            "field": "Current_a",
+            "hmi_reg": 45,
+            "scale": 10
+          },
+          {
+            "field": "Power_kw",
+            "hmi_reg": 46,
+            "scale": 10
+          }
+        ]
+      },
+      "topic": "IoT_ONE_Connect/FAR_VN_CT2/HOU_VN_CT2_01/DEV_148/data",
+      "topic_status": "IoT_ONE_Connect/FAR_VN_CT2/HOU_VN_CT2_01/DEV_148/status"
+    },
+    {
+      "name": "Slave_0x04",
+      "dest_h": "0x00",
+      "dest_l": "0x04",
+      "slave_id": "0x04",
+      "read": {
+        "start": 6,
+        "qty": 4,
+        "fields": [
+          {
+            "name": "Temperature_1",
+            "type": "s16",
+            "index": 0,
+            "scale": 0.1,
+            "iot_unit_point": "IUP_EE31F58C"
+          },
+          {
+            "name": "Humidity_1",
+            "type": "s16",
+            "index": 1,
+            "scale": 0.1,
+            "iot_unit_point": "IUP_074D99B9"
+          },
+          {
+            "name": "Light_2",
+            "type": "u16",
+            "index": 2,
+            "scale": 1,
+            "iot_unit_point": "IUP_B126C608"
+          },
+          {
+            "name": "Light_3",
+            "type": "u16",
+            "index": 3,
+            "scale": 1,
+            "iot_unit_point": "IUP_5B7ECF75"
+          }
+        ]
+      },
+      "display_target": {
+        "slave_id": "0x02",
+        "dest_h": "0x00",
+        "dest_l": "0x02",
+        "mappings": [
+          {
+            "field": "Temperature_1",
+            "hmi_reg": 9,
+            "scale": 10
+          },
+          {
+            "field": "Humidity_1",
+            "hmi_reg": 10,
+            "scale": 10
+          },
+          {
+            "field": "Light_2",
+            "hmi_reg": 1,
+            "scale": 1
+          },
+          {
+            "field": "Light_3",
+            "hmi_reg": 2,
+            "scale": 1
+          }
+        ]
+      },
+      "topic": "IoT_ONE_Connect/FAR_VN_CT2/HOU_VN_CT2_01/Slave_0x04/data",
+      "topic_status": "IoT_ONE_Connect/FAR_VN_CT2/HOU_VN_CT2_01/Slave_0x04/status"
+    },
+    {
+      "name": "Slave_0x05",
+      "dest_h": "0x00",
+      "dest_l": "0x05",
+      "slave_id": "0x05",
+      "read": {
+        "start": 6,
+        "qty": 3,
+        "fields": [
+          {
+            "name": "Light_1",
+            "type": "u16",
+            "index": 0,
+            "scale": 1,
+            "iot_unit_point": "IUP_E8547DAE"
+          },
+          {
+            "name": "WaterPresure_1",
+            "type": "u16",
+            "index": 1,
+            "scale": 1,
+            "iot_unit_point": "IUP_86ED4D00"
+          },
+          {
+            "name": "WaterPresure_2",
+            "type": "u16",
+            "index": 2,
+            "scale": 1,
+            "iot_unit_point": "IUP_4171FDB7"
+          }
+        ]
+      },
+      "display_target": {
+        "slave_id": "0x02",
+        "dest_h": "0x00",
+        "dest_l": "0x02",
+        "mappings": [
+          {
+            "field": "Light_1",
+            "hmi_reg": 0,
+            "scale": 1
+          },
+          {
+            "field": "WaterPresure_1",
+            "hmi_reg": 18,
+            "scale": 1
+          },
+          {
+            "field": "WaterPresure_2",
+            "hmi_reg": 19,
+            "scale": 1
+          }
+        ]
+      },
+      "topic": "IoT_ONE_Connect/FAR_VN_CT2/HOU_VN_CT2_01/Slave_0x05/data",
+      "topic_status": "IoT_ONE_Connect/FAR_VN_CT2/HOU_VN_CT2_01/Slave_0x05/status"
+    },
+    {
+      "name": "Slave_0x06",
+      "dest_h": "0x00",
+      "dest_l": "0x06",
+      "slave_id": "0x06",
+      "read": {
+        "start": 6,
+        "qty": 13,
+        "fields": [
+          {
+            "name": "Voltage_Phase1",
+            "type": "u16",
+            "index": 0,
+            "scale": 0.01,
+            "iot_unit_point": "IUP_83851BB2"
+          },
+          {
+            "name": "Voltage_Phase2",
+            "type": "u16",
+            "index": 1,
+            "scale": 0.01,
+            "iot_unit_point": "IUP_C6A9D7A5"
+          },
+          {
+            "name": "Voltage_Phase3",
+            "type": "u16",
+            "index": 2,
+            "scale": 0.01,
+            "iot_unit_point": "IUP_2BD075E8"
+          },
+          {
+            "name": "Current_Phase1",
+            "type": "u16",
+            "index": 3,
+            "scale": 0.01,
+            "iot_unit_point": "IUP_B394A7F8"
+          },
+          {
+            "name": "Current_Phase2",
+            "type": "u16",
+            "index": 4,
+            "scale": 0.01,
+            "iot_unit_point": "IUP_213408FE"
+          },
+          {
+            "name": "Current_Phase3",
+            "type": "u16",
+            "index": 5,
+            "scale": 0.01,
+            "iot_unit_point": "IUP_C9515C85"
+          },
+          {
+            "name": "Active_Power",
+            "type": "u16",
+            "index": 6,
+            "scale": 0.01,
+            "iot_unit_point": "IUP_45FCA8A5"
+          },
+          {
+            "name": "Reactive_Power",
+            "type": "u16",
+            "index": 7,
+            "scale": 0.01,
+            "iot_unit_point": "IUP_3BCBF2D3"
+          },
+          {
+            "name": "Apparent_Power",
+            "type": "u16",
+            "index": 8,
+            "scale": 0.01,
+            "iot_unit_point": "IUP_2ECEB70E"
+          },
+          {
+            "name": "Power_Factor",
+            "type": "u16",
+            "index": 9,
+            "scale": 0.01,
+            "iot_unit_point": "IUP_DE2A20EF"
+          },
+          {
+            "name": "Frequency",
+            "type": "u16",
+            "index": 10,
+            "scale": 0.01,
+            "iot_unit_point": "IUP_D7FC5686"
+          },
+          {
+            "name": "Enery",
+            "type": "u32",
+            "index": 11,
+            "scale": 0.01,
+            "iot_unit_point": "IUP_CF81399A"
+          }
+        ]
+      },
+      "topic": "IoT_ONE_Connect/FAR_VN_CT2/HOU_VN_CT2_01/Slave_0x06/data",
+      "topic_status": "IoT_ONE_Connect/FAR_VN_CT2/HOU_VN_CT2_01/Slave_0x06/status"
+    },
+    {
+      "name": "Slave_0x07",
+      "dest_h": "0x00",
+      "dest_l": "0x07",
+      "slave_id": "0x07",
+      "read": {
+        "start": 6,
+        "qty": 3,
+        "fields": [
+          {
+            "name": "WindSpeed_1",
+            "type": "u16",
+            "index": 0,
+            "scale": 0.01,
+            "iot_unit_point": "IUP_019BF7BC"
+          },
+          {
+            "name": "Light_4",
+            "type": "u16",
+            "index": 1,
+            "scale": 1,
+            "iot_unit_point": "IUP_2320D7D2"
+          },
+          {
+            "name": "Vibration_11",
+            "type": "u16",
+            "index": 2,
+            "scale": 1,
+            "iot_unit_point": "IUP_453DE39B"
+          }
+        ]
+      },
+      "display_target": {
+        "slave_id": "0x02",
+        "dest_h": "0x00",
+        "dest_l": "0x02",
+        "mappings": [
+          {
+            "field": "WindSpeed_1",
+            "hmi_reg": 15,
+            "scale": 100
+          },
+          {
+            "field": "Light_4",
+            "hmi_reg": 3,
+            "scale": 1
+          },
+          {
+            "field": "Vibration_11",
+            "hmi_reg": 26,
+            "scale": 1
+          }
+        ]
+      },
+      "topic": "IoT_ONE_Connect/FAR_VN_CT2/HOU_VN_CT2_01/Slave_0x07/data",
+      "topic_status": "IoT_ONE_Connect/FAR_VN_CT2/HOU_VN_CT2_01/Slave_0x07/status"
+    },
+    {
+      "name": "Slave_0x08",
+      "dest_h": "0x00",
+      "dest_l": "0x08",
+      "slave_id": "0x08",
+      "read": {
+        "start": 6,
+        "qty": 4,
+        "fields": [
+          {
+            "name": "Light_5",
+            "type": "u16",
+            "index": 0,
+            "scale": 1,
+            "iot_unit_point": "IUP_51158EB9"
+          },
+          {
+            "name": "CO2",
+            "type": "u16",
+            "index": 1,
+            "scale": 1,
+            "iot_unit_point": "IUP_6A93C3FD"
+          },
+          {
+            "name": "NH3",
+            "type": "u16",
+            "index": 2,
+            "scale": 1,
+            "iot_unit_point": "IUP_B1BDEF9F"
+          },
+          {
+            "name": "WindSpeed_2",
+            "type": "u16",
+            "index": 3,
+            "scale": 0.01,
+            "iot_unit_point": "IUP_0BA19157"
+          }
+        ]
+      },
+      "display_target": {
+        "slave_id": "0x02",
+        "dest_h": "0x00",
+        "dest_l": "0x02",
+        "mappings": [
+          {
+            "field": "Light_5",
+            "hmi_reg": 4,
+            "scale": 1
+          },
+          {
+            "field": "CO2",
+            "hmi_reg": 13,
+            "scale": 1
+          },
+          {
+            "field": "NH3",
+            "hmi_reg": 14,
+            "scale": 1
+          },
+          {
+            "field": "WindSpeed_2",
+            "hmi_reg": 16,
+            "scale": 100
+          }
+        ]
+      },
+      "topic": "IoT_ONE_Connect/FAR_VN_CT2/HOU_VN_CT2_01/Slave_0x08/data",
+      "topic_status": "IoT_ONE_Connect/FAR_VN_CT2/HOU_VN_CT2_01/Slave_0x08/status"
+    },
+    {
+      "name": "Slave_0x09",
+      "dest_h": "0x00",
+      "dest_l": "0x09",
+      "slave_id": "0x09",
+      "read": {
+        "start": 6,
+        "qty": 5,
+        "fields": [
+          {
+            "name": "Light_6",
+            "type": "u16",
+            "index": 0,
+            "scale": 1,
+            "iot_unit_point": "IUP_083CED7F"
+          },
+          {
+            "name": "WindSpeed_3",
+            "type": "u16",
+            "index": 1,
+            "scale": 0.01,
+            "iot_unit_point": "IUP_27976A2D"
+          },
+          {
+            "name": "Vibration_12",
+            "type": "u16",
+            "index": 2,
+            "scale": 1,
+            "iot_unit_point": "IUP_C0D51D78"
+          },
+          {
+            "name": "WaterPresure_5",
+            "type": "u16",
+            "index": 3,
+            "scale": 1,
+            "iot_unit_point": "IUP_E6E35F81"
+          },
+          {
+            "name": "WaterPresure_6",
+            "type": "u16",
+            "index": 4,
+            "scale": 1,
+            "iot_unit_point": "IUP_99E07ABE"
+          }
+        ]
+      },
+      "display_target": {
+        "slave_id": "0x02",
+        "dest_h": "0x00",
+        "dest_l": "0x02",
+        "mappings": [
+          {
+            "field": "Light_6",
+            "hmi_reg": 5,
+            "scale": 1
+          },
+          {
+            "field": "WindSpeed_3",
+            "hmi_reg": 17,
+            "scale": 100
+          },
+          {
+            "field": "Vibration_12",
+            "hmi_reg": 27,
+            "scale": 1
+          },
+          {
+            "field": "WaterPresure_5",
+            "hmi_reg": 22,
+            "scale": 1
+          },
+          {
+            "field": "WaterPresure_6",
+            "hmi_reg": 23,
+            "scale": 1
+          }
+        ]
+      },
+      "topic": "IoT_ONE_Connect/FAR_VN_CT2/HOU_VN_CT2_01/Slave_0x09/data",
+      "topic_status": "IoT_ONE_Connect/FAR_VN_CT2/HOU_VN_CT2_01/Slave_0x09/status"
+    },
+    {
+      "name": "Slave_0x10",
+      "dest_h": "0x00",
+      "dest_l": "0x10",
+      "slave_id": "0x10",
+      "read": {
+        "start": 6,
+        "qty": 3,
+        "fields": [
+          {
+            "name": "Light_7",
+            "type": "u16",
+            "index": 0,
+            "scale": 1,
+            "iot_unit_point": "IUP_7E278E94"
+          },
+          {
+            "name": "WaterPresure_3",
+            "type": "u16",
+            "index": 1,
+            "scale": 1,
+            "iot_unit_point": "IIUP_AB6201A6"
+          },
+          {
+            "name": "WaterPresure_4",
+            "type": "u16",
+            "index": 2,
+            "scale": 1,
+            "iot_unit_point": "IUP_6559D9AA"
+          }
+        ]
+      },
+      "display_target": {
+        "slave_id": "0x02",
+        "dest_h": "0x00",
+        "dest_l": "0x02",
+        "mappings": [
+          {
+            "field": "Light_7",
+            "hmi_reg": 6,
+            "scale": 1
+          },
+          {
+            "field": "WaterPresure_3",
+            "hmi_reg": 20,
+            "scale": 1
+          },
+          {
+            "field": "WaterPresure_4",
+            "hmi_reg": 21,
+            "scale": 1
+          }
+        ]
+      },
+      "topic": "IoT_ONE_Connect/FAR_VN_CT2/HOU_VN_CT2_01/Slave_0x10/data",
+      "topic_status": "IoT_ONE_Connect/FAR_VN_CT2/HOU_VN_CT2_01/Slave_0x10/status"
+    },
+    {
+      "name": "Slave_0x11",
+      "dest_h": "0x00",
+      "dest_l": "0x11",
+      "slave_id": "0x11",
+      "read": {
+        "start": 6,
+        "qty": 3,
+        "fields": [
+          {
+            "name": "Temperature_2",
+            "type": "s16",
+            "index": 0,
+            "scale": 0.1,
+            "iot_unit_point": "IUP_29B9ABF8"
+          },
+          {
+            "name": "Humidity_2",
+            "type": "s16",
+            "index": 1,
+            "scale": 0.1,
+            "iot_unit_point": "IUP_65C1C559"
+          },
+          {
+            "name": "Light_8",
+            "type": "u16",
+            "index": 2,
+            "scale": 1,
+            "iot_unit_point": "IUP_8AC8C7AD"
+          }
+        ]
+      },
+      "display_target": {
+        "slave_id": "0x02",
+        "dest_h": "0x00",
+        "dest_l": "0x02",
+        "mappings": [
+          {
+            "field": "Temperature_2",
+            "hmi_reg": 11,
+            "scale": 10
+          },
+          {
+            "field": "Humidity_2",
+            "hmi_reg": 12,
+            "scale": 10
+          },
+          {
+            "field": "Light_8",
+            "hmi_reg": 7,
+            "scale": 1
+          }
+        ]
+      },
+      "topic": "IoT_ONE_Connect/FAR_VN_CT2/HOU_VN_CT2_01/Slave_0x11/data",
+      "topic_status": "IoT_ONE_Connect/FAR_VN_CT2/HOU_VN_CT2_01/Slave_0x11/status"
+    },
+    {
+      "name": "Slave_0x12",
+      "dest_h": "0x00",
+      "dest_l": "0x12",
+      "slave_id": "0x12",
+      "read": {
+        "start": 6,
+        "qty": 3,
+        "fields": [
+          {
+            "name": "Light_9",
+            "type": "u16",
+            "index": 0,
+            "scale": 1,
+            "iot_unit_point": "IUP_93DAEE58"
+          },
+          {
+            "name": "WaterPresure_7",
+            "type": "u16",
+            "index": 1,
+            "scale": 1,
+            "iot_unit_point": "IUP_32E99969"
+          },
+          {
+            "name": "WaterPresure_8",
+            "type": "u16",
+            "index": 2,
+            "scale": 1,
+            "iot_unit_point": "IUP_1A90EDDC"
+          }
+        ]
+      },
+      "display_target": {
+        "slave_id": "0x02",
+        "dest_h": "0x00",
+        "dest_l": "0x02",
+        "mappings": [
+          {
+            "field": "Light_9",
+            "hmi_reg": 8,
+            "scale": 1
+          },
+          {
+            "field": "WaterPresure_7",
+            "hmi_reg": 24,
+            "scale": 1
+          },
+          {
+            "field": "WaterPresure_8",
+            "hmi_reg": 25,
+            "scale": 1
+          }
+        ]
+      },
+      "topic": "IoT_ONE_Connect/FAR_VN_CT2/HOU_VN_CT2_01/Slave_0x12/data",
+      "topic_status": "IoT_ONE_Connect/FAR_VN_CT2/HOU_VN_CT2_01/Slave_0x12/status"
+    },
+    {
+      "name": "Slave_0x13",
+      "dest_h": "0x00",
+      "dest_l": "0x13",
+      "slave_id": "0x13",
+      "read": {
+        "start": 6,
+        "qty": 10,
+        "fields": [
+          {
+            "name": "Vibration_1",
+            "type": "u16",
+            "index": 0,
+            "scale": 1,
+            "iot_unit_point": "IUP_9578CC8A"
+          },
+          {
+            "name": "Vibration_2",
+            "type": "u16",
+            "index": 1,
+            "scale": 1,
+            "iot_unit_point": "IUP_43EE853F"
+          },
+          {
+            "name": "Vibration_3",
+            "type": "u16",
+            "index": 2,
+            "scale": 1,
+            "iot_unit_point": "IUP_2218E054"
+          },
+          {
+            "name": "Vibration_4",
+            "type": "u16",
+            "index": 3,
+            "scale": 1,
+            "iot_unit_point": "IUP_64C603AE"
+          },
+          {
+            "name": "Vibration_5",
+            "type": "u16",
+            "index": 4,
+            "scale": 1,
+            "iot_unit_point": "IUP_4BDAD010"
+          },
+          {
+            "name": "Vibration_6",
+            "type": "u16",
+            "index": 5,
+            "scale": 1,
+            "iot_unit_point": "IUP_757B0B53"
+          },
+          {
+            "name": "Vibration_7",
+            "type": "u16",
+            "index": 6,
+            "scale": 1,
+            "iot_unit_point": "IUP_A306B48F"
+          },
+          {
+            "name": "Vibration_8",
+            "type": "u16",
+            "index": 7,
+            "scale": 1,
+            "iot_unit_point": "IUP_96643367"
+          },
+          {
+            "name": "Vibration_9",
+            "type": "u16",
+            "index": 8,
+            "scale": 1,
+            "iot_unit_point": "IUP_89E33C3E"
+          },
+          {
+            "name": "Vibration_10",
+            "type": "u16",
+            "index": 9,
+            "scale": 1,
+            "iot_unit_point": "IUP_D8D00035"
+          }
+        ]
+      },
+      "display_target": {
+        "slave_id": "0x02",
+        "dest_h": "0x00",
+        "dest_l": "0x02",
+        "mappings": [
+          {
+            "field": "Vibration_1",
+            "hmi_reg": 28,
+            "scale": 1
+          },
+          {
+            "field": "Vibration_2",
+            "hmi_reg": 29,
+            "scale": 1
+          },
+          {
+            "field": "Vibration_3",
+            "hmi_reg": 30,
+            "scale": 1
+          },
+          {
+            "field": "Vibration_4",
+            "hmi_reg": 31,
+            "scale": 1
+          },
+          {
+            "field": "Vibration_5",
+            "hmi_reg": 32,
+            "scale": 1
+          },
+          {
+            "field": "Vibration_6",
+            "hmi_reg": 33,
+            "scale": 1
+          },
+          {
+            "field": "Vibration_7",
+            "hmi_reg": 34,
+            "scale": 1
+          },
+          {
+            "field": "Vibration_8",
+            "hmi_reg": 35,
+            "scale": 1
+          },
+          {
+            "field": "Vibration_9",
+            "hmi_reg": 36,
+            "scale": 1
+          },
+          {
+            "field": "Vibration_10",
+            "hmi_reg": 37,
+            "scale": 1
+          }
+        ]
+      },
+      "topic": "IoT_ONE_Connect/FAR_VN_CT2/HOU_VN_CT2_01/Slave_0x13/data",
+      "topic_status": "IoT_ONE_Connect/FAR_VN_CT2/HOU_VN_CT2_01/Slave_0x13/status"
+    },
+    {
+      "name": "Slave_0x14",
+      "dest_h": "0x00",
+      "dest_l": "0x14",
+      "slave_id": "0x14",
+      "read": {
+        "start": 6,
+        "qty": 2,
+        "fields": [
+          {
+            "name": "Clorin",
+            "type": "u16",
+            "index": 0,
+            "scale": 0.1,
+            "iot_unit_point": "IUP_CB36DAAE"
+          },
+          {
+            "name": "PH",
+            "type": "u16",
+            "index": 1,
+            "scale": 0.01,
+            "iot_unit_point": "IUP_B23AD301"
+          }
+        ]
+      },
+      "topic": "IoT_ONE_Connect/FAR_VN_CT2/STA_1/Slave_0x14/data",
+      "topic_status": "IoT_ONE_Connect/FAR_VN_CT2/STA_1/Slave_0x14/status"
+    },
+    {
+      "name": "Slave_0x15",
+      "dest_h": "0x00",
+      "dest_l": "0x15",
+      "slave_id": "0x15",
+      "read": {
+        "start": 6,
+        "qty": 4,
+        "fields": [
+          {
+            "name": "Flow_Rate",
+            "type": "u16",
+            "index": 0,
+            "scale": 0.1,
+            "iot_unit_point": "IUP_EBCC8459"
+          },
+          {
+            "name": "TotalWater",
+            "type": "u32",
+            "index": 1,
+            "scale": 1,
+            "iot_unit_point": "IUP_728BCE33"
+          },
+          {
+            "name": "WaterLevel",
+            "type": "u16",
+            "index": 3,
+            "scale": 1,
+            "iot_unit_point": "IUP_6430C780"
+          }
+        ]
+      },
+      "topic": "IoT_ONE_Connect/FAR_VN_CT2/STA_1/Slave_0x15/data",
+      "topic_status": "IoT_ONE_Connect/FAR_VN_CT2/STA_1/Slave_0x15/status"
+    },
+    {
+      "name": "Slave_0x16",
+      "dest_h": "0x00",
+      "dest_l": "0x16",
+      "slave_id": "0x16",
+      "read": {
+        "start": 6,
+        "qty": 3,
+        "fields": [
+          {
+            "name": "Flow_Rate",
+            "type": "u16",
+            "index": 0,
+            "scale": 0.1,
+            "iot_unit_point": "IUP_1DFEE3DC"
+          },
+          {
+            "name": "TotalWater",
+            "type": "u32",
+            "index": 1,
+            "scale": 1,
+            "iot_unit_point": "IUP_826360CA"
+          }
+        ]
+      },
+      "topic": "IoT_ONE_Connect/FAR_VN_CT2/STA_1/Slave_0x16/data",
+      "topic_status": "IoT_ONE_Connect/FAR_VN_CT2/STA_1/Slave_0x16/status"
+    },
+    {
+      "name": "Slave_0x17",
+      "dest_h": "0x00",
+      "dest_l": "0x17",
+      "slave_id": "0x17",
+      "read": {
+        "start": 6,
+        "qty": 3,
+        "fields": [
+          {
+            "name": "Flow_Rate",
+            "type": "u16",
+            "index": 0,
+            "scale": 0.1,
+            "iot_unit_point": "IUP_C09F5F3F"
+          },
+          {
+            "name": "TotalWater",
+            "type": "u32",
+            "index": 1,
+            "scale": 1,
+            "iot_unit_point": "IUP_A897CE1D"
+          }
+        ]
+      },
+      "topic": "IoT_ONE_Connect/FAR_VN_CT2/STA_1/Slave_0x17/data",
+      "topic_status": "IoT_ONE_Connect/FAR_VN_CT2/STA_1/Slave_0x17/status"
+    },
+    {
+      "name": "Slave_0x18",
+      "dest_h": "0x00",
+      "dest_l": "0x18",
+      "slave_id": "0x18",
+      "read": {
+        "start": 6,
+        "qty": 12,
+        "fields": [
+          {
+            "name": "WindSpeed",
+            "type": "u16",
+            "index": 0,
+            "scale": 0.01,
+            "iot_unit_point": "IUP_D0A4C708"
+          },
+          {
+            "name": "WindDirection",
+            "type": "u16",
+            "index": 1,
+            "scale": 1,
+            "iot_unit_point": "IUP_9170DC5C"
+          },
+          {
+            "name": "Humidity",
+            "type": "u16",
+            "index": 2,
+            "scale": 0.1,
+            "iot_unit_point": "IUP_EABA2F35"
+          },
+          {
+            "name": "Temperature",
+            "type": "s16",
+            "index": 3,
+            "scale": 0.1,
+            "iot_unit_point": "IUP_8826608C"
+          },
+          {
+            "name": "Noise",
+            "type": "u16",
+            "index": 4,
+            "scale": 0.1,
+            "iot_unit_point": "IUP_77C13672"
+          },
+          {
+            "name": "PM2.5",
+            "type": "u16",
+            "index": 5,
+            "scale": 1,
+            "iot_unit_point": "IUP_8237133B"
+          },
+          {
+            "name": "PM10",
+            "type": "u16",
+            "index": 6,
+            "scale": 1,
+            "iot_unit_point": "IUP_E24B212A"
+          },
+          {
+            "name": "AirPressure",
+            "type": "u16",
+            "index": 7,
+            "scale": 0.1,
+            "iot_unit_point": "IUP_D26680E1"
+          },
+          {
+            "name": "Rainfall",
+            "type": "u16",
+            "index": 8,
+            "scale": 1,
+            "iot_unit_point": "IUP_9ECE9783"
+          },
+          {
+            "name": "Light",
+            "type": "u32",
+            "index": 9,
+            "scale": 1,
+            "iot_unit_point": "IUP_C3F6B533"
+          },
+          {
+            "name": "Radiation",
+            "type": "u16",
+            "index": 11,
+            "scale": 1,
+            "iot_unit_point": "IUP_B895A32E"
+          }
+        ]
+      },
+      "topic": "IoT_ONE_Connect/FAR_VN_CT2/STA_1/Slave_0x18/data",
+      "topic_status": "IoT_ONE_Connect/FAR_VN_CT2/STA_1/Slave_0x18/status"
+    },
+    {
+      "name": "Slave_0x19",
+      "dest_h": "0x00",
+      "dest_l": "0x19",
+      "slave_id": "0x19",
+      "read": {
+        "start": 6,
+        "qty": 2,
+        "fields": [
+          {
+            "name": "Temperature",
+            "type": "s16",
+            "index": 0,
+            "scale": 0.1,
+            "iot_unit_point": "IUP_432B6053"
+          },
+          {
+            "name": "Humidity",
+            "type": "u16",
+            "index": 1,
+            "scale": 0.1,
+            "iot_unit_point": "IUP_4AAB007B"
+          }
+        ]
+      },
+      "topic": "IoT_ONE_Connect/FAR_VN_CT2/HOU_VN_CT2_02/Slave_0x19/data",
+      "topic_status": "IoT_ONE_Connect/FAR_VN_CT2/HOU_VN_CT2_02/Slave_0x19/status"
+    },
+    {
+      "name": "Slave_0x20",
+      "dest_h": "0x00",
+      "dest_l": "0x20",
+      "slave_id": "0x20",
+      "read": {
+        "start": 6,
+        "qty": 6,
+        "fields": [
+          {
+            "name": "Temperature1",
+            "type": "s16",
+            "index": 0,
+            "scale": 0.1,
+            "iot_unit_point": "IUP_DCC5AF70"
+          },
+          {
+            "name": "Humidity1",
+            "type": "u16",
+            "index": 1,
+            "scale": 0.1,
+            "iot_unit_point": "IUP_AD21587D"
+          },
+          {
+            "name": "Temperature2",
+            "type": "s16",
+            "index": 2,
+            "scale": 0.1,
+            "iot_unit_point": "IUP_735935DE"
+          },
+          {
+            "name": "Humidity2",
+            "type": "u16",
+            "index": 3,
+            "scale": 0.1,
+            "iot_unit_point": "IUP_3487E1A2"
+          },
+          {
+            "name": "Temperature3",
+            "type": "s16",
+            "index": 4,
+            "scale": 0.1,
+            "iot_unit_point": "IUP_3D962C6F"
+          },
+          {
+            "name": "Humidity3",
+            "type": "u16",
+            "index": 5,
+            "scale": 0.1,
+            "iot_unit_point": "IUP_1ED37B96"
+          }
+        ]
+      },
+      "topic": "IoT_ONE_Connect/FAR_VN_CT2/HOU_VN_CT2_03/Slave_0x20/data",
+      "topic_status": "IoT_ONE_Connect/FAR_VN_CT2/HOU_VN_CT2_03/Slave_0x20/status"
+    },
+    {
+      "name": "Slave_0x21",
+      "dest_h": "0x00",
+      "dest_l": "0x21",
+      "slave_id": "0x21",
+      "read": {
+        "start": 6,
+        "qty": 6,
+        "fields": [
+          {
+            "name": "Temperature4",
+            "type": "s16",
+            "index": 0,
+            "scale": 0.1,
+            "iot_unit_point": "IUP_BA80DF6A"
+          },
+          {
+            "name": "Humidity4",
+            "type": "u16",
+            "index": 1,
+            "scale": 0.1,
+            "iot_unit_point": "IUP_990CDAD3"
+          },
+          {
+            "name": "Temperature5",
+            "type": "s16",
+            "index": 2,
+            "scale": 0.1,
+            "iot_unit_point": "IUP_A6B93A33"
+          },
+          {
+            "name": "Humidity5",
+            "type": "u16",
+            "index": 3,
+            "scale": 0.1,
+            "iot_unit_point": "IUP_E9577A86"
+          },
+          {
+            "name": "Temperature6",
+            "type": "s16",
+            "index": 4,
+            "scale": 0.1,
+            "iot_unit_point": "IUP_7F648F48"
+          },
+          {
+            "name": "Humidity6",
+            "type": "u16",
+            "index": 5,
+            "scale": 0.1,
+            "iot_unit_point": "IUP_C91114A0"
+          }
+        ]
+      },
+      "topic": "IoT_ONE_Connect/FAR_VN_CT2/HOU_VN_CT2_03/Slave_0x21/data",
+      "topic_status": "IoT_ONE_Connect/FAR_VN_CT2/HOU_VN_CT2_03/Slave_0x21/status"
+    }
+  ]
+}
