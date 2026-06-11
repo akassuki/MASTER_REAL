@@ -7,16 +7,18 @@ import paho.mqtt.client as mqtt
 from datetime import datetime
 from modbuslora import ModbusLoRa
 import requests
+import queue
 import os
+import subprocess
 
-CONFIG_PATH = "/home/neit/Projects/Desktop/device_config.json"
+CONFIG_PATH        = "/home/pi/MASTER_REAL/device_config.json"
 OTA_SERVER_URL     = "http://14.224.150.7:5000/version.json"
 OTA_CHECK_INTERVAL = 30.0
-OTA_BINARY_PATH    = "/home/neit/Projects/CHUNK/chunked"
-OTA_FIRMWARE_DIR   = "/home/neit/Projects/Desktop/ota_cache"
+OTA_BINARY_PATH    = "/home/pi/CHUNK/chunked"
+OTA_FIRMWARE_DIR   = "/home/pi/MASTER_REAL/ota_cache"
 OTA_PUBLIC_KEY     = "./bin/public.pem"
 OTA_LOCAL_JSON     = "./JSON/version.json"
-MASTER_BIN         = "/home/neit/Projects/communication/master"
+MASTER_BIN         = "/home/pi/communication/master"
 
 # ================= GLOBAL STATE =================
 pending_cmd = {}
@@ -31,11 +33,33 @@ lock = threading.Lock()
 polling_idle_event = threading.Event()
 polling_idle_event.set()
 
+# ================= OTA SKIP LIST =================
+ota_skip_set  = set()           # set addl đang OTA, kiểm tra O(1)
+ota_skip_lock = threading.Lock()
+
+def ota_add_skip(addl: int, node: str):
+    """OTA loop gọi khi bắt đầu OTA node → polling sẽ bỏ qua slave này."""
+    with ota_skip_lock:
+        if addl not in ota_skip_set:
+            ota_skip_set.add(addl)
+            print(f"[OTA] [{node}] addl=0x{addl:02X} thêm vào skip list → polling tạm dừng")
+
+def ota_remove_skip(addl: int, node: str):
+    """Gọi sau khi OTA xong (hoặc thất bại) → cho phép polling lại."""
+    with ota_skip_lock:
+        ota_skip_set.discard(addl)
+    print(f"[OTA] [{node}] addl=0x{addl:02X} xóa khỏi skip list → polling tiếp tục")
+
+def ota_should_skip(addl: int) -> bool:
+    """Polling loop gọi để kiểm tra có nên bỏ qua device này không."""
+    with ota_skip_lock:
+        return addl in ota_skip_set
+
 # ================= CONFIG =================
-MAX_REGISTERS_PER_READ = 7
+MAX_REGISTERS_PER_READ  = 7
 MAX_REGISTERS_PER_WRITE = 4
-DELAY_BETWEEN_CHUNKS = 0.3
-DELAY_BETWEEN_WRITES = 0.6
+DELAY_BETWEEN_CHUNKS    = 0.3
+DELAY_BETWEEN_WRITES    = 0.6
 
 # ================= UTILS =================
 def load_config():
@@ -77,25 +101,25 @@ def build_iup_lookup(dev):
 
 # ================= AUTO SPLIT READS =================
 def split_read_config(read_cfg):
-    start = read_cfg["start"]
-    qty = read_cfg["qty"]
+    start  = read_cfg["start"]
+    qty    = read_cfg["qty"]
     fields = read_cfg["fields"]
 
     if qty <= MAX_REGISTERS_PER_READ:
         return [read_cfg]
 
-    chunks = []
+    chunks        = []
     current_start = start
-    remaining = qty
+    remaining     = qty
 
     while remaining > 0:
         chunk_size = min(MAX_REGISTERS_PER_READ, remaining)
-        chunk_end = current_start + chunk_size
+        chunk_end  = current_start + chunk_size
 
         chunk_fields = []
         for f in fields:
             field_index = f.get("index", 0)
-            field_type = f.get("type", "u16")
+            field_type  = f.get("type", "u16")
             field_start = start + field_index
             if field_type in ("u32", "f32"):
                 field_end = field_start + 2
@@ -111,7 +135,7 @@ def split_read_config(read_cfg):
             chunks.append({"start": current_start, "qty": chunk_size, "fields": chunk_fields})
 
         current_start += chunk_size
-        remaining -= chunk_size
+        remaining     -= chunk_size
 
     print(f"[AUTO SPLIT READ] Split {qty} regs into {len(chunks)} chunks: {[c['qty'] for c in chunks]}")
     return chunks
@@ -121,21 +145,21 @@ def split_write_groups(write_groups):
     split_groups = []
     for group in write_groups:
         start_reg = group["start_reg"]
-        values = group["values"]
-        fields = group.get("fields", [])
+        values    = group["values"]
+        fields    = group.get("fields", [])
 
         if len(values) <= MAX_REGISTERS_PER_WRITE:
             split_groups.append(group)
             continue
 
-        num_values = len(values)
+        num_values  = len(values)
         chunk_start = 0
         while chunk_start < num_values:
             chunk_size = min(MAX_REGISTERS_PER_WRITE, num_values - chunk_start)
-            chunk_end = chunk_start + chunk_size
+            chunk_end  = chunk_start + chunk_size
             chunk_group = {
                 "start_reg": start_reg + chunk_start,
-                "values": values[chunk_start:chunk_end]
+                "values":    values[chunk_start:chunk_end]
             }
             if fields:
                 chunk_group["fields"] = fields[chunk_start:chunk_end]
@@ -160,9 +184,9 @@ def read_mac_address(modbus, slave, dh, dl, timeout):
 
 def get_mac_each_poll(modbus, dev, timeout):
     dev_name = dev["name"]
-    slave = parse_int(dev["slave_id"])
-    dh = parse_int(dev["dest_h"])
-    dl = parse_int(dev["dest_l"])
+    slave    = parse_int(dev["slave_id"])
+    dh       = parse_int(dev["dest_h"])
+    dl       = parse_int(dev["dest_l"])
     mac = read_mac_address(modbus, slave, dh, dl, timeout)
     if mac:
         device_mac_cache[dev_name] = mac
@@ -173,8 +197,8 @@ def get_mac_each_poll(modbus, dev, timeout):
 def decode_fields(regs, fields):
     out = {}
     for f in fields:
-        i = f.get("index", 0)
-        t = f.get("type")
+        i     = f.get("index", 0)
+        t     = f.get("type")
         scale = f.get("scale", 1)
         if i >= len(regs):
             continue
@@ -205,12 +229,11 @@ def build_mqtt_payload(dev_name, mac, data, iup_lookup):
             continue
         entry = {"iot_unit_point": iup_lookup.get(field_name, ""), "name": field_name, "value": value}
         data_list.append(entry)
-
     return {
         "Device": dev_name,
         "ID_Mac": mac,
-        "ts": now(),
-        "data": data_list
+        "ts":     now(),
+        "data":   data_list
     }
 
 # ================= BUILD STATUS PAYLOAD =================
@@ -218,7 +241,7 @@ def build_status_payload(dev_name, mac, status, reason=None):
     payload = {
         "Device": dev_name,
         "ID_Mac": mac,
-        "ts": now(),
+        "ts":     now(),
         "status": status
     }
     if reason:
@@ -239,12 +262,12 @@ def send_zeros_to_hmi(modbus, display_cfg, dev_name):
     if "mappings" not in display_cfg:
         return
 
-    slave = parse_int(display_cfg["slave_id"])
-    dh = parse_int(display_cfg["dest_h"])
-    dl = parse_int(display_cfg["dest_l"])
+    slave    = parse_int(display_cfg["slave_id"])
+    dh       = parse_int(display_cfg["dest_h"])
+    dl       = parse_int(display_cfg["dest_l"])
     mappings = display_cfg["mappings"]
 
-    write_groups = []
+    write_groups  = []
     current_group = None
 
     for mapping in sorted(mappings, key=lambda x: x["hmi_reg"]):
@@ -286,18 +309,18 @@ def forward_to_hmi(modbus, display_cfg, data, dev_name):
         print(f"[HMI] {dev_name}: No mappings defined")
         return
 
-    slave = parse_int(display_cfg["slave_id"])
-    dh = parse_int(display_cfg["dest_h"])
-    dl = parse_int(display_cfg["dest_l"])
+    slave    = parse_int(display_cfg["slave_id"])
+    dh       = parse_int(display_cfg["dest_h"])
+    dl       = parse_int(display_cfg["dest_l"])
     mappings = display_cfg["mappings"]
 
-    write_groups = []
+    write_groups  = []
     current_group = None
 
     for mapping in sorted(mappings, key=lambda x: x["hmi_reg"]):
-        field_name = mapping["field"]
-        hmi_reg = mapping["hmi_reg"]
-        scale = mapping.get("scale", 1)
+        field_name   = mapping["field"]
+        hmi_reg      = mapping["hmi_reg"]
+        scale        = mapping.get("scale", 1)
 
         if field_name not in data:
             continue
@@ -338,21 +361,9 @@ def forward_to_hmi(modbus, display_cfg, data, dev_name):
 
 # ================= MQTT =================
 def on_mqtt_message(client, userdata, msg):
-    """
-    Xử lý message từ topic_control riêng của từng device có control config.
-
-    Payload adjust_param:
-        {"group": "adjust_param", "value": 80, "iot_device": "IOD_1191", "device": "DEV_147"}
-        -> Ghi value * 100 vào freq_reg (forward speed/param)
-
-    Payload change_state:
-        {"group": "change_state", "action": 1, "iot_device": "IOD_1191", "device": "DEV_147"}
-        -> Ghi action (1=bật / 0=tắt) vào cmd_reg
-    """
     try:
         active = get_active_cfg(userdata["cfg"])
 
-        # Tìm device theo topic nhận được
         dev = None
         for d in active["devices"]:
             if d.get("topic_control") == msg.topic:
@@ -364,7 +375,7 @@ def on_mqtt_message(client, userdata, msg):
             return
 
         payload = json.loads(msg.payload.decode())
-        group = payload.get("group")
+        group   = payload.get("group")
 
         if group not in ("adjust_param", "change_state"):
             print(f"[MQTT CTRL] Unknown group: '{group}' from {msg.topic}")
@@ -389,7 +400,6 @@ def connect_mqtt(cfg, devices):
     c.on_message = on_mqtt_message
     c.connect(cfg["host"], cfg["port"], 60)
 
-    # Subscribe topic_control riêng của từng device có control config
     subscribed = []
     for dev in devices:
         if "control" not in dev:
@@ -407,12 +417,10 @@ def connect_mqtt(cfg, devices):
     print("[MQTT] connected")
     return c
 
-
 # ================= CONFIG MONITOR THREAD =================
 def config_monitor_loop(mqtt_client):
     global config_data
 
-    # Track subscribed control topics to avoid duplicate subscriptions
     subscribed_control_topics = set()
 
     while True:
@@ -427,7 +435,6 @@ def config_monitor_loop(mqtt_client):
                 with lock:
                     config_data = new_config
 
-                # Re-subscribe topic_control mới của từng device có control
                 for dev in new_config["devices"]:
                     if "control" not in dev:
                         continue
@@ -445,7 +452,6 @@ def config_monitor_loop(mqtt_client):
 
         time.sleep(2)
 
-
 # ================= POLLING THREAD =================
 def polling_loop(cfg, modbus, mqtt_client):
     global current_device, polling_enabled
@@ -455,28 +461,34 @@ def polling_loop(cfg, modbus, mqtt_client):
     while True:
         active = get_active_cfg(cfg)
 
-        devices = active["devices"]
-        log_file = active["LogFile"]
+        devices          = active["devices"]
+        log_file         = active["LogFile"]
         response_timeout = active["ResponseTimeout"]
 
-        total_cycle_ms = active.get("PollInterval", 300)
+        total_cycle_ms   = active.get("PollInterval", 300)
         per_device_sleep = max(total_cycle_ms / max(len(devices), 1), 1) / 1000.0
 
         with lock:
             if not polling_enabled:
                 time.sleep(0.05)
                 continue
-            dev = devices[dev_index]
+            dev            = devices[dev_index]
             current_device = dev["name"]
 
         slave = parse_int(dev["slave_id"])
-        dh = parse_int(dev["dest_h"])
-        dl = parse_int(dev["dest_l"])
-        r = dev["read"]
+        dh    = parse_int(dev["dest_h"])
+        dl    = parse_int(dev["dest_l"])
 
+        # Bỏ qua device đang trong quá trình OTA
+        if ota_should_skip(dl):
+            print(f"[POLL] Bỏ qua {dev['name']} (addl=0x{dl:02X}) đang OTA")
+            dev_index = (dev_index + 1) % len(devices)
+            time.sleep(per_device_sleep)
+            continue
+
+        r          = dev["read"]
         iup_lookup = build_iup_lookup(dev)
-        dev_topic = dev.get("topic")
-
+        dev_topic  = dev.get("topic")
         read_chunks = split_read_config(r)
 
         print(f"\n[POLL START] {dev['name']} (Slave 0x{slave:02X}) -> {dev_topic}")
@@ -487,8 +499,8 @@ def polling_loop(cfg, modbus, mqtt_client):
         mac = get_mac_each_poll(modbus, dev, response_timeout)
 
         # 2) Read data
-        all_data = {}
-        success = False
+        all_data     = {}
+        success      = False
         failed_chunks = []
 
         for chunk_idx, chunk in enumerate(read_chunks):
@@ -544,20 +556,8 @@ def polling_loop(cfg, modbus, mqtt_client):
         dev_index = (dev_index + 1) % len(devices)
         time.sleep(per_device_sleep)
 
-
 # ================= CONTROL THREAD =================
 def control_loop(cfg, modbus):
-    """
-    Xử lý lệnh điều khiển từ pending_cmd.
-
-    group = "adjust_param":
-        - Ghi value * 100 vào freq_reg
-        - Ý nghĩa: thay đổi tần số/tốc độ (ví dụ: 50 Hz -> ghi 5000)
-
-    group = "change_state":
-        - action = 1 -> Ghi 1 vào cmd_reg (bật)
-        - action = 0 -> Ghi 0 vào cmd_reg (tắt)
-    """
     global polling_enabled
 
     while True:
@@ -568,11 +568,10 @@ def control_loop(cfg, modbus):
             dev_name, cmd = pending_cmd.popitem()
             polling_enabled = False
 
-        # Chờ polling đang chạy dở kết thúc
         polling_idle_event.wait(timeout=2.0)
 
-        active = get_active_cfg(cfg)
-        devices = active["devices"]
+        active           = get_active_cfg(cfg)
+        devices          = active["devices"]
         response_timeout = active["ResponseTimeout"]
 
         try:
@@ -590,36 +589,27 @@ def control_loop(cfg, modbus):
                 polling_enabled = True
             continue
 
-        slave = parse_int(dev["slave_id"])
-        dh = parse_int(dev["dest_h"])
-        dl = parse_int(dev["dest_l"])
-
-        group = cmd.get("group")
+        slave    = parse_int(dev["slave_id"])
+        dh       = parse_int(dev["dest_h"])
+        dl       = parse_int(dev["dest_l"])
+        group    = cmd.get("group")
         cmd_reg  = ctrl["cmd_reg"]
         freq_reg = ctrl["freq_reg"]
 
         polling_idle_event.clear()
         try:
             if group == "adjust_param":
-                # Bước 1: ghi value * 100 vào freq_reg
                 raw_value = int(float(cmd.get("value", 0)) * 100)
                 modbus.write_registers(
-                    slave=slave,
-                    start=freq_reg,
-                    values=[raw_value],
-                    dest_h=dh, dest_l=dl,
-                    timeout=response_timeout
+                    slave=slave, start=freq_reg, values=[raw_value],
+                    dest_h=dh, dest_l=dl, timeout=response_timeout
                 )
                 print(f"[CTRL] {dev_name}: adjust_param -> Reg[{freq_reg}] = {raw_value} (value={cmd.get('value')} x100)")
                 time.sleep(DELAY_BETWEEN_WRITES)
 
-                # Bước 2: ghi cmd_reg = 2 (FORWARD) để áp dụng thông số mới
                 modbus.write_registers(
-                    slave=slave,
-                    start=cmd_reg,
-                    values=[2],
-                    dest_h=dh, dest_l=dl,
-                    timeout=response_timeout
+                    slave=slave, start=cmd_reg, values=[2],
+                    dest_h=dh, dest_l=dl, timeout=response_timeout
                 )
                 print(f"[CTRL] {dev_name}: adjust_param -> Reg[{cmd_reg}] = 2 (FORWARD)")
 
@@ -628,19 +618,13 @@ def control_loop(cfg, modbus):
                 if action not in (0, 1):
                     print(f"[CTRL] {dev_name}: Invalid action value '{action}', expected 0 or 1")
                 else:
-                    # action=1 (bật)  -> cmd_reg = 2 (FORWARD)
-                    # action=0 (tắt)  -> cmd_reg = 1 (STOP)
-                    cmd_val  = 2 if action == 1 else 1
+                    cmd_val   = 2 if action == 1 else 1
                     state_str = "ON (FORWARD)" if action == 1 else "OFF (STOP)"
                     modbus.write_registers(
-                        slave=slave,
-                        start=cmd_reg,
-                        values=[cmd_val],
-                        dest_h=dh, dest_l=dl,
-                        timeout=response_timeout
+                        slave=slave, start=cmd_reg, values=[cmd_val],
+                        dest_h=dh, dest_l=dl, timeout=response_timeout
                     )
                     print(f"[CTRL] {dev_name}: change_state -> Reg[{cmd_reg}] = {cmd_val} ({state_str})")
-
             else:
                 print(f"[CTRL] {dev_name}: Unknown group '{group}'")
 
@@ -652,16 +636,17 @@ def control_loop(cfg, modbus):
         with lock:
             polling_enabled = True
 
+# ================= OTA UTILS =================
 def ota_parse_ver(v: str):
+    """'0.0.4' → (0, 0, 4) để so sánh đúng theo số."""
     try:
         parts = tuple(int(x) for x in v.strip().split("."))
         return parts if len(parts) == 3 else (0, 0, 0)
     except Exception:
         return (0, 0, 0)
 
- 
 def ota_load_local_versions():
-    """Đọc version.json local → dict {node_name: version}"""
+    """Đọc version.json local → dict {node_name: version}."""
     try:
         with open(OTA_LOCAL_JSON, "r", encoding="utf-8") as f:
             entries = json.load(f)
@@ -669,17 +654,72 @@ def ota_load_local_versions():
             entries = [entries]
         return {e["node"]: e["version"] for e in entries if "node" in e and "version" in e}
     except FileNotFoundError:
+        print(f"[OTA] Local JSON chưa có: {OTA_LOCAL_JSON}")
         return {}
     except Exception as e:
+        print(f"[OTA] Đọc local JSON lỗi: {e}")
         return {}
+
+def ota_download(node: str, version: str, url: str) -> str | None:
+    """Tải file từ URL về OTA_FIRMWARE_DIR, trả về đường dẫn local."""
+    try:
+        if not url.startswith("http"):
+            base_url = OTA_SERVER_URL.rsplit("/", 1)[0]
+            url = f"{base_url}/{url}"
+
+        filename   = url.rsplit("/", 1)[-1]
+        local_path = os.path.join(OTA_FIRMWARE_DIR, f"{node}_{version}_{filename}")
+
+        print(f"[OTA] [{node}] Đang tải: {url}")
+        r = requests.get(url, timeout=30, verify=False)
+        r.raise_for_status()
+
+        os.makedirs(OTA_FIRMWARE_DIR, exist_ok=True)
+        with open(local_path, "wb") as f:
+            f.write(r.content)
+
+        print(f"[OTA] [{node}] Tải OK: {local_path} ({len(r.content)} bytes)")
+        return local_path
+
+    except Exception as e:
+        print(f"[OTA] [{node}] Tải thất bại {url}: {e}")
+        return None
+
+def ota_verify_signature(node: str, fw_path: str, sig_path: str) -> bool:
+    """Xác thực chữ ký firmware bằng openssl."""
+    try:
+        result = subprocess.run(
+            ["openssl", "dgst", "-sha256",
+             "-verify", OTA_PUBLIC_KEY,
+             "-signature", sig_path,
+             fw_path],
+            capture_output=True, text=True, timeout=10,
+        )
+        if result.returncode == 0:
+            print(f"[OTA] [{node}] Signature hợp lệ")
+            return True
+        else:
+            print(f"[OTA] [{node}] Signature KHÔNG hợp lệ: {result.stderr.strip()}")
+            return False
+    except FileNotFoundError:
+        print(f"[OTA] [{node}] Không tìm thấy lệnh openssl")
+        return False
+    except Exception as e:
+        print(f"[OTA] [{node}] Lỗi verify: {e}")
+        return False
 
 # ================= OTA LOOP =================
 def ota_update_loop():
     """
-    Luồng kiểm tra OTA mỗi OTA_CHECK_INTERVAL giây.
-    - GET version.json từ server
-    - So sánh từng node với local JSON
-    - Nếu server mới hơn → log ra, sẵn sàng xử lý tiếp (download/verify/apply)
+    Luồng OTA chạy mỗi OTA_CHECK_INTERVAL giây:
+      1. GET version.json từ server
+      2. So sánh version từng node với local JSON
+      3. Nếu server mới hơn:
+         - Thêm addl vào skip list → polling bỏ qua slave này
+         - Tải firmware + signature về
+         - Verify chữ ký
+         - Nếu thất bại → xóa khỏi skip list ngay
+         - Nếu thành công → firmware sẵn sàng (TODO: apply)
     """
     print("[OTA] Thread bắt đầu")
 
@@ -690,8 +730,6 @@ def ota_update_loop():
             resp.raise_for_status()
 
             data = resp.json()
-
-            # Hỗ trợ cả dict (1 node) lẫn list (nhiều node)
             if isinstance(data, dict):
                 server_entries = [data]
             elif isinstance(data, list):
@@ -707,56 +745,58 @@ def ota_update_loop():
                 if not isinstance(entry, dict):
                     continue
 
-                node    = entry.get("node", "")
-                version = entry.get("version", "")
+                node    = entry.get("node",      "")
+                version = entry.get("version",   "")
+                fw_url  = entry.get("firmware",  "")
+                sig_url = entry.get("signature", "")
+                address = entry.get("address",   "")
 
-                if not node or not version:
-                    print(f"[OTA] Entry thiếu node/version: {entry}")
+                if not all([node, version, fw_url, sig_url, address]):
+                    print(f"[OTA] Entry thiếu trường: {entry}")
                     continue
 
-                local_ver  = local_versions.get(node, "0.0.0")
-                server_ver = version
+                local_ver = local_versions.get(node, "0.0.0")
 
-                if ota_parse_ver(server_ver) > ota_parse_ver(local_ver):
-                    print(f"[OTA] [{node}] Có bản mới: local={local_ver} → server={server_ver}")
-                    # TODO: gọi download + verify + apply ở đây
-                    firmware_file = entry.get("firmware","")
-                    signature_file = entry.get("signature","")
+                if ota_parse_ver(version) <= ota_parse_ver(local_ver):
+                    print(f"[OTA] [{node}] Up-to-date (local={local_ver} >= server={version})")
+                    continue
 
-                    if firmware_file:
-                        try:
-                            if firmware_file.startswith("http"):
-                                fw_url = firmware_file
-                            else:
-                                base_url = OTA_SERVER_URL.rsplit("/", 1)[0]
-                                fw_url = f"{base_url}/{firmware_file}"
-                            local_fw_name = firmware_file.rsplit("/", 1)[-1]
-                            fw_path = os.path.join(OTA_FIRMWARE_DIR, f"{node}_{server_ver}_{local_fw_name}")
-                            resp = requests.get(fw_url, timeout=20,verify = False)
-                            resp.raise_for_status()
-                            with open(fw_path, "wb") as f:
-                                f.write(resp.content)
-                        except Exception as e:
-                            print(f"[OTA] Lỗi tải firmware cho {node}: {e}")
-                            continue
-                    if signature_file:
-                        try:
-                            if signature_file.startswith("http"):
-                                sig_url = signature_file
-                            else:
-                                base_url = OTA_SERVER_URL.rsplit("/", 1)[0]
-                                sig_url = f"{base_url}/{signature_file}"
-                            local_sig_name = signature_file.rsplit("/", 1)[-1]
-                            sig_path = os.path.join(OTA_FIRMWARE_DIR, f"{node}_{server_ver}_{local_sig_name}")
-                            resp = requests.get(sig_url, timeout=20,verify = False)
-                            resp.raise_for_status()
-                            with open(sig_path, "wb") as f:
-                                f.write(resp.content)
-                        except Exception as e:
-                            print(f"[OTA] Lỗi tải signature cho {node}: {e}")
-                            continue
-                else:
-                    print(f"[OTA] [{node}] Up-to-date (local={local_ver} >= server={server_ver})")
+                # Parse địa chỉ "0x00:0x03" → lấy addl
+                try:
+                    parts = address.split(":")
+                    addl  = int(parts[1], 16)
+                except Exception:
+                    print(f"[OTA] [{node}] Địa chỉ sai format: {address}")
+                    continue
+
+                print(f"[OTA] [{node}] Có bản mới: local={local_ver} → server={version}")
+
+                # Thêm vào skip list → polling bỏ qua slave này
+                ota_add_skip(addl, node)
+
+                # Tải firmware
+                fw_path = ota_download(node, version, fw_url)
+                if not fw_path:
+                    print(f"[OTA] [{node}] Tải firmware thất bại → bỏ qua")
+                    ota_remove_skip(addl, node)
+                    continue
+
+                # Tải signature
+                sig_path = ota_download(node, version, sig_url)
+                if not sig_path:
+                    print(f"[OTA] [{node}] Tải signature thất bại → bỏ qua")
+                    ota_remove_skip(addl, node)
+                    continue
+
+                # Verify chữ ký
+                if not ota_verify_signature(node, fw_path, sig_path):
+                    print(f"[OTA] [{node}] Verify thất bại → bỏ qua")
+                    ota_remove_skip(addl, node)
+                    continue
+
+                print(f"[OTA] [{node}] Firmware sẵn sàng: {fw_path}")
+                # TODO: apply firmware (gửi chunk qua LoRa)
+                # Sau khi apply xong gọi: ota_remove_skip(addl, node)
 
         except requests.exceptions.ConnectionError:
             print("[OTA] Không kết nối được server")
@@ -783,7 +823,6 @@ def main():
     print(f"[CONFIG] Delay between read chunks:  {DELAY_BETWEEN_CHUNKS}s")
     print(f"[CONFIG] Delay between write chunks: {DELAY_BETWEEN_WRITES}s")
 
-    # Liệt kê device có control
     ctrl_devices = [d["name"] for d in cfg["devices"] if "control" in d]
     print(f"[CONFIG] Controllable devices ({len(ctrl_devices)}): {ctrl_devices}")
 
@@ -804,10 +843,10 @@ def main():
     print("[MASTER] started")
     print("=" * 60)
 
-    threading.Thread(target=config_monitor_loop, args=(mqtt_client,), daemon=True).start()
+    threading.Thread(target=config_monitor_loop, args=(mqtt_client,),           daemon=True).start()
     threading.Thread(target=polling_loop,         args=(cfg, modbus, mqtt_client), daemon=True).start()
-    threading.Thread(target=control_loop,         args=(cfg, modbus), daemon=True).start()
-    threading.Thread(target=ota_update_loop                         , daemon=True).start()
+    threading.Thread(target=control_loop,         args=(cfg, modbus),            daemon=True).start()
+    threading.Thread(target=ota_update_loop,                                     daemon=True).start()
 
     try:
         while True:
