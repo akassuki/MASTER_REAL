@@ -11,14 +11,14 @@ import queue
 import os
 import subprocess
 
-CONFIG_PATH        = "/home/pi/MASTER_REAL/device_config.json"
+CONFIG_PATH        = "/home/neit/Projects/Desktop/device_config.json"
 OTA_SERVER_URL     = "http://14.224.150.7:5000/version.json"
 OTA_CHECK_INTERVAL = 30.0
-OTA_BINARY_PATH    = "/home/pi/CHUNK/chunked"
-OTA_FIRMWARE_DIR   = "/home/pi/MASTER_REAL/ota_cache"
+OTA_BINARY_PATH    = "/home/neit/Projects/CHUNK/chunked"
+OTA_FIRMWARE_DIR   = "/home/neit/Projects/Desktop/ota_cache"
 OTA_PUBLIC_KEY     = "./bin/public.pem"
 OTA_LOCAL_JSON     = "./JSON/version.json"
-MASTER_BIN         = "/home/pi/communication/master"
+MASTER_BIN         = "/home/neit/Projects/communication/master"
 
 # ================= GLOBAL STATE =================
 pending_cmd = {}
@@ -36,6 +36,10 @@ polling_idle_event.set()
 # ================= OTA SKIP LIST =================
 ota_skip_set  = set()           # set addl đang OTA, kiểm tra O(1)
 ota_skip_lock = threading.Lock()
+
+# Cache các node đã tải firmware thành công trong phiên chạy này
+# {node_name: version} - tránh tải lại mỗi 30 giây
+ota_done_cache: dict = {}
 
 def ota_add_skip(addl: int, node: str):
     """OTA loop gọi khi bắt đầu OTA node → polling sẽ bỏ qua slave này."""
@@ -761,6 +765,11 @@ def ota_update_loop():
                     print(f"[OTA] [{node}] Up-to-date (local={local_ver} >= server={version})")
                     continue
 
+                # Kiểm tra in-memory cache: đã tải thành công trong phiên này chưa
+                if ota_done_cache.get(node) == version:
+                    print(f"[OTA] [{node}] Đã tải xong trong phiên này (version={version}), bỏ qua")
+                    continue
+
                 # Parse địa chỉ "0x00:0x03" → lấy addl
                 try:
                     parts = address.split(":")
@@ -777,23 +786,25 @@ def ota_update_loop():
                 # Tải firmware
                 fw_path = ota_download(node, version, fw_url)
                 if not fw_path:
-                    print(f"[OTA] [{node}] Tải firmware thất bại → bỏ qua")
+                    print(f"[OTA] [{node}] Tải firmware thất bại → thử lại lần sau")
                     ota_remove_skip(addl, node)
                     continue
 
                 # Tải signature
                 sig_path = ota_download(node, version, sig_url)
                 if not sig_path:
-                    print(f"[OTA] [{node}] Tải signature thất bại → bỏ qua")
+                    print(f"[OTA] [{node}] Tải signature thất bại → thử lại lần sau")
                     ota_remove_skip(addl, node)
                     continue
 
                 # Verify chữ ký
                 if not ota_verify_signature(node, fw_path, sig_path):
-                    print(f"[OTA] [{node}] Verify thất bại → bỏ qua")
+                    print(f"[OTA] [{node}] Verify thất bại → thử lại lần sau")
                     ota_remove_skip(addl, node)
                     continue
 
+                # Tải + verify thành công → lưu vào cache, không tải lại nữa
+                ota_done_cache[node] = version
                 print(f"[OTA] [{node}] Firmware sẵn sàng: {fw_path}")
                 # TODO: apply firmware (gửi chunk qua LoRa)
                 # Sau khi apply xong gọi: ota_remove_skip(addl, node)
