@@ -12,7 +12,7 @@
     "port": "/dev/ttyModbusLora",
     "baudrate": 9600,
     "model": "433T30D",
-    "channel": 15
+    "channel": 20
   },
   "devices": [
     {
