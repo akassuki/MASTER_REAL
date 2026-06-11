@@ -11,14 +11,14 @@ import queue
 import os
 import subprocess
 
-CONFIG_PATH        = "/home/neit/Projects/Desktop/device_config.json"
+CONFIG_PATH        = "/home/pi/MASTER_REAL/device_config.json"
 OTA_SERVER_URL     = "http://14.224.150.7:5000/version.json"
 OTA_CHECK_INTERVAL = 30.0
-OTA_BINARY_PATH    = "/home/neit/Projects/CHUNK/chunked"
-OTA_FIRMWARE_DIR   = "/home/neit/Projects/Desktop/ota_cache"
+OTA_BINARY_PATH    = "/home/pi/CHUNK/chunked"
+OTA_FIRMWARE_DIR   = "/home/pi/MASTER_REAL/ota_cache"
 OTA_PUBLIC_KEY     = "./bin/public.pem"
 OTA_LOCAL_JSON     = "./JSON/version.json"
-MASTER_BIN         = "/home/neit/Projects/communication/master"
+MASTER_BIN         = "/home/pi/communication/master"
 
 # ================= GLOBAL STATE =================
 pending_cmd = {}
@@ -33,31 +33,68 @@ lock = threading.Lock()
 polling_idle_event = threading.Event()
 polling_idle_event.set()
 
-# ================= OTA SKIP LIST =================
-ota_skip_set  = set()           # set addl đang OTA, kiểm tra O(1)
+# ================= OTA STATE =================
 ota_skip_lock = threading.Lock()
 
 # Cache các node đã tải firmware thành công trong phiên chạy này
 # {node_name: version} - tránh tải lại mỗi 30 giây
 ota_done_cache: dict = {}
 
-def ota_add_skip(addl: int, node: str):
-    """OTA loop gọi khi bắt đầu OTA node → polling sẽ bỏ qua slave này."""
-    with ota_skip_lock:
-        if addl not in ota_skip_set:
-            ota_skip_set.add(addl)
-            print(f"[OTA] [{node}] addl=0x{addl:02X} thêm vào skip list → polling tạm dừng")
+# Trạng thái OTA từng node, keyed by addl
+# {
+#   addl: {
+#     "node":        str,   # tên node
+#     "fw_path":     str,   # đường dẫn firmware local
+#     "version":     str,   # version đang OTA
+#     "ota_addl":    int,   # addl của OTA server
+#     "redirected":  bool,  # đã gửi CMD_OTA chưa
+#     "chunk_index": int,   # chunk sẽ gửi tiếp theo
+#   }
+# }
+ota_node_state: dict = {}
 
-def ota_remove_skip(addl: int, node: str):
-    """Gọi sau khi OTA xong (hoặc thất bại) → cho phép polling lại."""
+def ota_add_node(addl: int, ota_addl: int, node: str, fw_path: str, version: str):
+    """OTA loop gọi sau khi tải + verify firmware thành công."""
     with ota_skip_lock:
-        ota_skip_set.discard(addl)
-    print(f"[OTA] [{node}] addl=0x{addl:02X} xóa khỏi skip list → polling tiếp tục")
+        if addl not in ota_node_state:
+            ota_node_state[addl] = {
+                "node":        node,
+                "fw_path":     fw_path,
+                "version":     version,
+                "ota_addl":    ota_addl,
+                "redirected":  False,
+                "chunk_index": 0,
+            }
+            print(f"[OTA] [{node}] addl=0x{addl:02X} thêm vào OTA queue → polling sẽ xử lý")
+
+def ota_remove_node(addl: int, node: str):
+    """Gọi khi OTA xong hoặc thất bại hoàn toàn → polling lại bình thường."""
+    with ota_skip_lock:
+        ota_node_state.pop(addl, None)
+    print(f"[OTA] [{node}] addl=0x{addl:02X} xóa khỏi OTA queue → polling tiếp tục")
+
+def ota_get_state(addl: int):
+    """Polling loop lấy trạng thái OTA của node, None nếu không có."""
+    with ota_skip_lock:
+        import copy
+        return copy.copy(ota_node_state.get(addl))
+
+def ota_update_chunk_index(addl: int, new_index: int):
+    """Cập nhật chunk_index sau mỗi lần gửi thành công."""
+    with ota_skip_lock:
+        if addl in ota_node_state:
+            ota_node_state[addl]["chunk_index"] = new_index
+
+def ota_mark_redirected(addl: int):
+    """Đánh dấu đã gửi CMD_OTA redirect thành công."""
+    with ota_skip_lock:
+        if addl in ota_node_state:
+            ota_node_state[addl]["redirected"] = True
 
 def ota_should_skip(addl: int) -> bool:
-    """Polling loop gọi để kiểm tra có nên bỏ qua device này không."""
+    """Polling loop kiểm tra nhanh có node này đang OTA không."""
     with ota_skip_lock:
-        return addl in ota_skip_set
+        return addl in ota_node_state
 
 # ================= CONFIG =================
 MAX_REGISTERS_PER_READ  = 7
@@ -456,6 +493,123 @@ def config_monitor_loop(mqtt_client):
 
         time.sleep(2)
 
+# ================= OTA SEND (helper) =================
+def ota_send_one(node_name: str, dl: int, state: dict, lora_cfg: dict):
+    """
+    Xử lý OTA cho một node sau khi đã poll xong toàn bộ vòng.
+      - Nếu chưa redirect: gọi ./master với ADDL_OTA
+      - Nếu đã redirect:   gọi ./chunked gửi 1 chunk
+    """
+    port = lora_cfg["port"]
+    baud = lora_cfg["baudrate"]
+    ch   = lora_cfg["channel"]
+
+    fw_path    = state["fw_path"]
+    ota_addl   = state["ota_addl"]
+    chunk_idx  = state["chunk_index"]
+    redirected = state["redirected"]
+
+    if not redirected:
+        # ── Bước 1: Gửi CMD_OTA redirect một lần duy nhất ──
+        print(f"[OTA] [{node_name}] Gửi OTA redirect → node=0x{dl:02X} server=0x{ota_addl:02X}")
+        cmd = [
+            MASTER_BIN,
+            port,
+            "0x00",
+            f"0x{dl:02X}",
+            f"0x{ota_addl:02X}",
+            str(ch),
+            str(baud),
+        ]
+        try:
+            result = subprocess.run(cmd, capture_output=True, text=True, timeout=15)
+            if result.stderr:
+                for line in result.stderr.strip().splitlines():
+                    print(f"  [C-OTA] {line}")
+            if result.returncode == 0:
+                ota_mark_redirected(dl)
+                print(f"[OTA] [{node_name}] Redirect OK → vòng sau bắt đầu gửi chunk")
+            else:
+                print(f"[OTA] [{node_name}] Redirect thất bại (rc={result.returncode}) → thử lại vòng sau")
+        except subprocess.TimeoutExpired:
+            print(f"[OTA] [{node_name}] Redirect timeout → thử lại vòng sau")
+        except Exception as e:
+            print(f"[OTA] [{node_name}] Redirect lỗi: {e}")
+
+    else:
+        # ── Bước 2: Gửi từng chunk bằng ./chunked ──
+        print(f"[OTA] [{node_name}] Gửi chunk {chunk_idx} → {fw_path}")
+        cmd = [
+            OTA_BINARY_PATH,
+            port,
+            str(baud),
+            "0x00",
+            f"0x{dl:02X}",
+            f"0x{ch:02X}",
+            fw_path,
+            str(chunk_idx),
+        ]
+        try:
+            result = subprocess.run(cmd, capture_output=True, text=True, timeout=30)
+            if result.stderr:
+                for line in result.stderr.strip().splitlines():
+                    print(f"  [chunked] {line}")
+
+            if result.returncode == 2:
+                # DONE — gửi hết chunk
+                print(f"[OTA] [{node_name}] Tất cả chunk đã gửi xong → OTA hoàn tất")
+                ota_remove_node(dl, node_name)
+                ota_save_local_version(node_name)
+
+            elif result.returncode == 0:
+                # OK — gửi chunk tiếp theo
+                ota_update_chunk_index(dl, chunk_idx + 1)
+                print(f"[OTA] [{node_name}] Chunk {chunk_idx} OK → tiếp theo {chunk_idx + 1}")
+
+            else:
+                # ERR — thử lại chunk này lần sau
+                print(f"[OTA] [{node_name}] Chunk {chunk_idx} thất bại (rc={result.returncode}) → thử lại vòng sau")
+
+        except subprocess.TimeoutExpired:
+            print(f"[OTA] [{node_name}] Chunk {chunk_idx} timeout → thử lại vòng sau")
+        except Exception as e:
+            print(f"[OTA] [{node_name}] Chunk {chunk_idx} lỗi: {e}")
+
+
+def ota_save_local_version(node_name: str):
+    """Ghi version mới vào local JSON sau khi OTA hoàn tất."""
+    try:
+        # Đọc entry từ ota_done_cache (version đã xác nhận)
+        version = ota_done_cache.get(node_name, "")
+        if not version:
+            return
+
+        entries = []
+        try:
+            with open(OTA_LOCAL_JSON, "r", encoding="utf-8") as f:
+                entries = json.load(f)
+            if isinstance(entries, dict):
+                entries = [entries]
+        except Exception:
+            entries = []
+
+        # Cập nhật hoặc thêm mới
+        for i, e in enumerate(entries):
+            if e.get("node") == node_name:
+                entries[i]["version"] = version
+                break
+        else:
+            entries.append({"node": node_name, "version": version})
+
+        os.makedirs(os.path.dirname(OTA_LOCAL_JSON), exist_ok=True)
+        with open(OTA_LOCAL_JSON, "w", encoding="utf-8") as f:
+            json.dump(entries, f, indent=4, ensure_ascii=False)
+
+        print(f"[OTA] [{node_name}] Local JSON cập nhật → version={version}")
+    except Exception as e:
+        print(f"[OTA] [{node_name}] Ghi local JSON thất bại: {e}")
+
+
 # ================= POLLING THREAD =================
 def polling_loop(cfg, modbus, mqtt_client):
     global current_device, polling_enabled
@@ -468,6 +622,7 @@ def polling_loop(cfg, modbus, mqtt_client):
         devices          = active["devices"]
         log_file         = active["LogFile"]
         response_timeout = active["ResponseTimeout"]
+        lora_cfg         = active["lora"]
 
         total_cycle_ms   = active.get("PollInterval", 300)
         per_device_sleep = max(total_cycle_ms / max(len(devices), 1), 1) / 1000.0
@@ -483,82 +638,91 @@ def polling_loop(cfg, modbus, mqtt_client):
         dh    = parse_int(dev["dest_h"])
         dl    = parse_int(dev["dest_l"])
 
-        # Bỏ qua device đang trong quá trình OTA
+        # ── Pha 1: Poll bình thường (kể cả node đang OTA vẫn poll) ──
+        # Chỉ bỏ qua nếu node đang trong OTA queue
         if ota_should_skip(dl):
             print(f"[POLL] Bỏ qua {dev['name']} (addl=0x{dl:02X}) đang OTA")
-            dev_index = (dev_index + 1) % len(devices)
-            time.sleep(per_device_sleep)
-            continue
-
-        r          = dev["read"]
-        iup_lookup = build_iup_lookup(dev)
-        dev_topic  = dev.get("topic")
-        read_chunks = split_read_config(r)
-
-        print(f"\n[POLL START] {dev['name']} (Slave 0x{slave:02X}) -> {dev_topic}")
-
-        polling_idle_event.clear()
-
-        # 1) Read MAC
-        mac = get_mac_each_poll(modbus, dev, response_timeout)
-
-        # 2) Read data
-        all_data     = {}
-        success      = False
-        failed_chunks = []
-
-        for chunk_idx, chunk in enumerate(read_chunks):
-            try:
-                res = modbus.read_registers(
-                    slave=slave, start=chunk["start"], qty=chunk["qty"],
-                    dest_h=dh, dest_l=dl, timeout=response_timeout
-                )
-                if res and "registers" in res:
-                    chunk_data = decode_fields(res["registers"], chunk["fields"])
-                    all_data.update(chunk_data)
-                    success = True
-                    print(f"  [Chunk {chunk_idx+1}/{len(read_chunks)}] Regs[{chunk['start']}:{chunk['start']+chunk['qty']-1}] -> {len(chunk_data)} fields OK")
-                else:
-                    failed_chunks.append(chunk_idx + 1)
-                    print(f"  [Chunk {chunk_idx+1}/{len(read_chunks)}] NO RESPONSE")
-
-                if chunk_idx < len(read_chunks) - 1:
-                    time.sleep(DELAY_BETWEEN_CHUNKS)
-
-            except Exception as e:
-                failed_chunks.append(chunk_idx + 1)
-                print(f"  [Chunk {chunk_idx+1}/{len(read_chunks)}] ERROR - {e}")
-
-        polling_idle_event.set()
-
-        if success and all_data:
-            payload = build_mqtt_payload(dev["name"], mac, all_data, iup_lookup)
-            print(f"  [MERGED PACKET] {len(all_data)} fields:")
-            print(f"  {json.dumps(payload, ensure_ascii=False)}")
-
-            if failed_chunks:
-                print(f"  [Warning] Chunks {failed_chunks} failed, partial data sent")
-
-            if dev_topic:
-                mqtt_client.publish(dev_topic, json.dumps(payload, ensure_ascii=False))
-                print(f"  [OK] MQTT Published -> {dev_topic}")
-
-            write_log(log_file, payload)
-            publish_status(mqtt_client, dev, mac, "online")
-
-            if "display_target" in dev:
-                forward_to_hmi(modbus, dev["display_target"], all_data, dev["name"])
         else:
-            print(f"  [FAILED] No data from {dev['name']} (MAC: {mac})")
-            publish_status(mqtt_client, dev, mac, "offline", reason="no_response")
+            r           = dev["read"]
+            iup_lookup  = build_iup_lookup(dev)
+            dev_topic   = dev.get("topic")
+            read_chunks = split_read_config(r)
 
-            if "display_target" in dev:
-                send_zeros_to_hmi(modbus, dev["display_target"], dev["name"])
+            print(f"\n[POLL START] {dev['name']} (Slave 0x{slave:02X}) -> {dev_topic}")
 
-        print("=" * 60)
+            polling_idle_event.clear()
 
+            mac = get_mac_each_poll(modbus, dev, response_timeout)
+
+            all_data      = {}
+            success       = False
+            failed_chunks = []
+
+            for chunk_idx, chunk in enumerate(read_chunks):
+                try:
+                    res = modbus.read_registers(
+                        slave=slave, start=chunk["start"], qty=chunk["qty"],
+                        dest_h=dh, dest_l=dl, timeout=response_timeout
+                    )
+                    if res and "registers" in res:
+                        chunk_data = decode_fields(res["registers"], chunk["fields"])
+                        all_data.update(chunk_data)
+                        success = True
+                        print(f"  [Chunk {chunk_idx+1}/{len(read_chunks)}] Regs[{chunk['start']}:{chunk['start']+chunk['qty']-1}] -> {len(chunk_data)} fields OK")
+                    else:
+                        failed_chunks.append(chunk_idx + 1)
+                        print(f"  [Chunk {chunk_idx+1}/{len(read_chunks)}] NO RESPONSE")
+
+                    if chunk_idx < len(read_chunks) - 1:
+                        time.sleep(DELAY_BETWEEN_CHUNKS)
+
+                except Exception as e:
+                    failed_chunks.append(chunk_idx + 1)
+                    print(f"  [Chunk {chunk_idx+1}/{len(read_chunks)}] ERROR - {e}")
+
+            polling_idle_event.set()
+
+            if success and all_data:
+                payload = build_mqtt_payload(dev["name"], mac, all_data, iup_lookup)
+                print(f"  [MERGED PACKET] {len(all_data)} fields:")
+                print(f"  {json.dumps(payload, ensure_ascii=False)}")
+
+                if failed_chunks:
+                    print(f"  [Warning] Chunks {failed_chunks} failed, partial data sent")
+
+                if dev_topic:
+                    mqtt_client.publish(dev_topic, json.dumps(payload, ensure_ascii=False))
+                    print(f"  [OK] MQTT Published -> {dev_topic}")
+
+                write_log(log_file, payload)
+                publish_status(mqtt_client, dev, mac, "online")
+
+                if "display_target" in dev:
+                    forward_to_hmi(modbus, dev["display_target"], all_data, dev["name"])
+            else:
+                print(f"  [FAILED] No data from {dev['name']} (MAC: {mac})")
+                publish_status(mqtt_client, dev, mac, "offline", reason="no_response")
+
+                if "display_target" in dev:
+                    send_zeros_to_hmi(modbus, dev["display_target"], dev["name"])
+
+            print("=" * 60)
+
+        # ── Pha 2: Sau khi poll xong 1 vòng đầy đủ, gửi OTA cho các node đang chờ ──
         dev_index = (dev_index + 1) % len(devices)
         time.sleep(per_device_sleep)
+
+        if dev_index == 0:
+            # Vừa hoàn thành 1 vòng poll tất cả device
+            # → snapshot OTA state và gửi 1 chunk cho mỗi node đang chờ
+            with ota_skip_lock:
+                pending_snapshot = list(ota_node_state.items())
+
+            for addl, state in pending_snapshot:
+                node_name = state["node"]
+                print(f"\n[OTA CYCLE] Xử lý OTA cho [{node_name}] addl=0x{addl:02X}")
+                ota_send_one(node_name, addl, state, lora_cfg)
+                time.sleep(1.0)
 
 # ================= CONTROL THREAD =================
 def control_loop(cfg, modbus):
@@ -780,34 +944,27 @@ def ota_update_loop():
 
                 print(f"[OTA] [{node}] Có bản mới: local={local_ver} → server={version}")
 
-                # Thêm vào skip list → polling bỏ qua slave này
-                ota_add_skip(addl, node)
-
                 # Tải firmware
                 fw_path = ota_download(node, version, fw_url)
                 if not fw_path:
                     print(f"[OTA] [{node}] Tải firmware thất bại → thử lại lần sau")
-                    ota_remove_skip(addl, node)
                     continue
 
                 # Tải signature
                 sig_path = ota_download(node, version, sig_url)
                 if not sig_path:
                     print(f"[OTA] [{node}] Tải signature thất bại → thử lại lần sau")
-                    ota_remove_skip(addl, node)
                     continue
 
                 # Verify chữ ký
                 if not ota_verify_signature(node, fw_path, sig_path):
                     print(f"[OTA] [{node}] Verify thất bại → thử lại lần sau")
-                    ota_remove_skip(addl, node)
                     continue
 
-                # Tải + verify thành công → lưu vào cache, không tải lại nữa
+                # Tải + verify thành công → lưu cache + đưa vào OTA queue
                 ota_done_cache[node] = version
-                print(f"[OTA] [{node}] Firmware sẵn sàng: {fw_path}")
-                # TODO: apply firmware (gửi chunk qua LoRa)
-                # Sau khi apply xong gọi: ota_remove_skip(addl, node)
+                ota_add_node(addl, addl, node, fw_path, version)
+                print(f"[OTA] [{node}] Firmware sẵn sàng, polling_loop sẽ gửi chunk")
 
         except requests.exceptions.ConnectionError:
             print("[OTA] Không kết nối được server")
